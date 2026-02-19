@@ -1,0 +1,83 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+    commands:
+      - echo "Installing Node.js dependencies..."
+      - cd backend
+      - npm install
+
+  pre_build:
+    commands:
+      - echo "Running pre-build checks"
+      - echo "Verifying application structure..."
+      - |
+        if [ ! -f backend/server.js ]; then
+          echo "ERROR: backend/server.js not found!"
+          exit 1
+        fi
+      - |
+        if [ ! -d frontend ]; then
+          echo "ERROR: frontend directory not found!"
+          exit 1
+        fi
+      - |
+        if [ ! -d backend/routes ]; then
+          echo "ERROR: backend/routes directory not found!"
+          exit 1
+        fi
+      - |
+        if [ ! -d backend/migrations ]; then
+          echo "ERROR: backend/migrations directory not found!"
+          exit 1
+        fi
+      - |
+        if [ ! -f backend/scripts/run-migrations.js ]; then
+          echo "ERROR: backend/scripts/run-migrations.js not found!"
+          exit 1
+        fi
+
+  build:
+    commands:
+      - echo "Preparing artifacts..."
+      - echo "Note: No build step required for Node.js application"
+      - echo "Organizing frontend and backend for deployment..."
+
+  post_build:
+    commands:
+      - echo "Preparing deployment artifacts..."
+      - echo "Organizing frontend (static files) and backend (application code)..."
+      - |
+        mkdir -p artifacts
+      - echo "Copying frontend files (for S3 content bucket)..."
+      - |
+        cp -r frontend artifacts/ 2>/dev/null || true
+      - echo "Copying backend files (for CodeDeploy artifacts bucket)..."
+      - |
+        cp -r backend artifacts/ 2>/dev/null || true
+        if [ -d scripts ]; then
+          cp -r scripts artifacts/
+        fi
+        cp appspec.yml artifacts/ 2>/dev/null || true
+      - echo "Verifying migration files are included..."
+      - |
+        if [ -f artifacts/backend/scripts/run-migrations.js ] && [ -d artifacts/backend/migrations ]; then
+          echo "✓ Migration runner and migration files included"
+          ls -la artifacts/backend/migrations/*.sql 2>/dev/null | wc -l | xargs echo "  Migration files:"
+        else
+          echo "WARNING: Migration files may be missing"
+        fi
+      - echo "Artifacts organized:"
+      - echo "  - artifacts/frontend/ → S3 Content Bucket (via CodePipeline)"
+      - echo "  - artifacts/backend/ → S3 Artifacts Bucket → CodeDeploy (via CodePipeline)"
+      - echo "Note: CodePipeline will automatically zip and upload artifacts to S3"
+
+artifacts:
+  files:
+    - artifacts/frontend/**
+    - artifacts/backend/**
+    - artifacts/scripts/**
+    - artifacts/appspec.yml
+  name: app-deployment-artifact
